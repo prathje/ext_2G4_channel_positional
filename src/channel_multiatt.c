@@ -320,7 +320,7 @@ int channel_init(int argc, char *argv[], uint n_devs) {
     int read = 0;
     matrix_file = bs_fopen(args.matrix_file_name, "r");
 
-    while (read != EOF) {
+    while (true) {
       uint rx, tx;
       double att;
       char *filename;
