@@ -43,6 +43,11 @@ struct device_status {
 
     struct pos_t last_pos; // the last position
     struct pos_t next_pos; // the next position (which will be reached at next_time)
+
+
+    char cache_initialized;
+    struct pos_t cached_pos; // the cached position (since most of the time, a tx is relevant for more devices
+    bs_time_t cached_time; // the time of the cached position
 };
 
 typedef struct {
@@ -67,12 +72,7 @@ typedef struct {
 /* All the status of the channel */
 static channel_status_t channel_status;
 
-
-/**
- * Write the linearly interpolated position of device into out_pos
- * Caution: File needs to have parsed timestamp t entirely!
- */
-static int get_pos(struct pos_t *out_pos, uint device_index, bs_time_t t) {
+static int calc_interpolated_pos(struct pos_t *out_pos, uint device_index, bs_time_t t) {
 
     struct device_status *ds = &channel_status.devices_status[device_index];
 
@@ -101,6 +101,29 @@ static int get_pos(struct pos_t *out_pos, uint device_index, bs_time_t t) {
 
     //bs_trace_warning_line("t: %u, d: %u, X: %f \n", t, device_index, out_pos->x);
     return 0;
+}
+
+
+/**
+ * Write the linearly interpolated position of device into out_pos
+ * Caution: File needs to have parsed timestamp t entirely!
+ */
+static struct pos_t *get_pos(uint device_index, bs_time_t t) {
+
+    struct device_status *ds = &channel_status.devices_status[device_index];
+
+    if (!ds->cache_initialized || ds->cached_time != t) { // we need to calculate again...
+        int res = calc_interpolated_pos(&ds->cached_pos, device_index, t);
+
+        if (res) {
+            bs_trace_error_line("Could not calculate pos for device %u\n", device_index);
+        }
+
+        ds->cache_initialized = 1;
+        ds->cached_time = t;
+    }
+
+    return &ds->cached_pos;
 }
 
 
@@ -152,7 +175,7 @@ static int stream_readline(char *buf, int size, FILE *stream) {
 
 
 
-static void parse_stream_until(bs_time_t now) {
+static void advance_until(bs_time_t now) {
 
     if (now <= channel_status.parsed_time && channel_status.parsing_initialized) {
         // Nothing todo right now
@@ -227,23 +250,29 @@ static void parse_stream_until(bs_time_t now) {
             ds->next_time = next_line_time;
 
             ds->has_position = 1;
+            // we need to recalculate the position
+            ds->cache_initialized = 0;
         } else if(read >= 7 && !strcmp(cmd, "move")) {
             if (!ds->has_position) {
                 bs_trace_error_line("File %s wants to move device %d with unknown current position in line %s \n", channel_status.position_stream_path, device_index, channel_status.next_line);
             }
 
             struct pos_t cur_pos;
-            int err = get_pos(&cur_pos, device_index, next_line_time);
+            int err = calc_interpolated_pos(&cur_pos, device_index, next_line_time);
 
             if (err) {
                 bs_trace_error_line("could not generate cur_pos while parsing line %s\n", channel_status.next_line);
             }
+
+            // we need to recalculate the position
+            ds->cache_initialized = 0;
 
             // we set the last pos to the last_known (maybe interpolated) position
             ds->last_pos.x = cur_pos.x;
             ds->last_pos.y = cur_pos.y;
             ds->last_pos.z = cur_pos.z;
             ds->last_time = next_line_time;
+
 
             // we now use the new, extracted position and the corresponding duration to set the next position
             // if duration is set to 0, the next position will be used directly
@@ -297,25 +326,19 @@ static double PathLossFromDistance(double distance){
 /**
  * Return the path loss from <tx> -> <rx> in this instant (<Now>)
  */
-static double calculate_att(uint tx, uint rx, bs_time_t Now) {
+static double calculate_att(uint tx, uint rx, bs_time_t now) {
 
-    bs_trace_warning_line("calculate_att_start t: %u, tx: %u, rx: %u\n", Now, tx, rx);
     if (!channel_status.devices_status[tx].communication_enabled || !channel_status.devices_status[rx].communication_enabled) {
         return 1000.0; // TODO: this is very arbitrary...
-    }
-
-    struct pos_t pos_tx, pos_rx;
-    int tx_pos_ret = get_pos(&pos_tx, tx, Now);
-    int rx_pos_ret = get_pos(&pos_rx, rx, Now);
-
-    // if either device is not initialized, we can not calculate the specific attenuation and use the default one for this path!
-    if (tx_pos_ret != 0 || rx_pos_ret != 0) {
+    } else if (!channel_status.devices_status[tx].has_position || !channel_status.devices_status[rx].has_position) {
         return channel_status.attenuation + channel_status.atxtra;
     }
 
-    double dist = euclidean_dist(&pos_tx, &pos_rx);
+    // get_pos returns a pointer to the cached position at time now
+    struct pos_t *pos_tx = get_pos(tx, now);
+    struct pos_t *pos_rx = get_pos(rx, now);
 
-    bs_trace_warning_line("calculate_att_end t: %u, tx: %u, rx: %u dist: %f, PL: %f\n", Now, tx, rx, dist, PathLossFromDistance(dist));
+    double dist = euclidean_dist(pos_tx, pos_rx);
 
     // simply return the path loss based on the calculated distance
     return PathLossFromDistance(dist) + channel_status.atxtra;
@@ -355,6 +378,13 @@ int channel_init(int argc, char *argv[], uint n_devs) {
         ds->next_pos.y = 0;
         ds->next_pos.z = 0;
         ds->next_time = 0;
+
+
+        ds->cache_initialized = 0;
+        ds->cached_pos.x = 0;
+        ds->cached_pos.y = 0;
+        ds->cached_pos.z = 0;
+        ds->cached_time = 0;
   }
 
   if (channel_status.position_stream_path != NULL) {
@@ -393,7 +423,7 @@ int channel_init(int argc, char *argv[], uint n_devs) {
  * 0 otherwise
  */
 int channel_calc(const uint *tx_used, tx_el_t *tx_list, uint txnbr, uint rxnbr, bs_time_t now, double *att, double *ISI_SNR) {
-  parse_stream_until(now);
+  advance_until(now);
   uint tx_i;
   for (tx_i = 0 ; tx_i < n_devices; tx_i++) {
     if (tx_used[tx_i]) {
