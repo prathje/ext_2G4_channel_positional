@@ -1,4 +1,4 @@
-# ext_2G4_channel_multiatt
+# ext_2G4_channel_positional
 
 This is a channel model for ext_2G4_phy_v1
 

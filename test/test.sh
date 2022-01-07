@@ -19,16 +19,16 @@ BSIM_OUT_PATH="${BSIM_OUT_PATH:-../../../}"
 cd ${BSIM_OUT_PATH}/bin
 
 Execute ./bs_device_2G4_playback \
-  -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -d=0 -inputf=../components/ext_2G4_channel_multiatt/test/0
+  -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -d=0 -inputf=../components/ext_2G4_channel_positional/test/0
 
 Execute ./bs_device_2G4_playback \
-  -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -d=1 -inputf=../components/ext_2G4_channel_multiatt/test/1
+  -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -d=1 -inputf=../components/ext_2G4_channel_positional/test/1
 
 Execute ./bs_device_2G4_playback \
-  -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -d=2 -inputf=../components/ext_2G4_channel_multiatt/test/2
+  -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -d=2 -inputf=../components/ext_2G4_channel_positional/test/2
 
-Execute ./bs_2G4_phy_v1 -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -channel=multiatt \
-  -argschannel -at=30 -file=../components/ext_2G4_channel_multiatt/test/silly.matrix -atextra=10  -argsmain \
+Execute ./bs_2G4_phy_v1 -v=${VERBOSITY_LEVEL} -s=${SIMULATION_ID} -channel=positional \
+  -argschannel -at=30 -file=../components/ext_2G4_channel_positional/test/silly.matrix -atextra=10  -argsmain \
   -D=3 -sim_length=20e6 $@
 
 for PROCESS_ID in $PROCESS_IDS; do
