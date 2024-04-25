@@ -1,7 +1,6 @@
 # ext_2G4_channel_positional
 
-This is an extension of the ext_2G4_channel_multiatt model. 
-This is a non realistic channel model.
+This is an extension of the ext_2G4_channel_multiatt and [ext_2G4_channel_Indoorv1](https://github.com/BabbleSim/ext_2G4_channel_Indoorv1).
 
 Instead of defining attenuations directly, this channel derives the attenuation based on 3D device positions.
 This is especially interesting, when there are many devices present.
