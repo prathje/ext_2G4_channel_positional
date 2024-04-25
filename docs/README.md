@@ -25,6 +25,8 @@ The following commands are supported in this file:
 - <ts> set <id> <x> <y> <z> => sets the position of node <id> at <ts>
 - <ts> move <id> <x> <y> <z> <duration> => moves node <id> to position x,y,z in time duration (starting from the known position at ts (0,0,0) if not set before
 
+Timestamps and durations are in us, whereas coordinates are given in meters.
+
 The file names can be either absolute or relative to `bin/`
 
 For both files, `#` is treated as a comment mark (anything after a `#` is
@@ -38,3 +40,14 @@ packet length.
 Therefore, the channel model won't be called to reevaluate conditions during a
 packet unless the devices that are transmitting change.
 
+An example file for the positions:
+
+```
+0 set 0 0 0 0 0
+0 set 1 0 0 0 0
+0 move 1 100 0 0 60000000
+0 move 0 100 0 0 60000000
+1 disable 0
+30000000 enable 0
+45000000 disable 1
+```
